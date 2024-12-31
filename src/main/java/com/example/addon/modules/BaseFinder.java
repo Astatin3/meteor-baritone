@@ -13,15 +13,20 @@ import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
+import meteordevelopment.meteorclient.utils.player.FindItemResult;
+import meteordevelopment.meteorclient.utils.player.InvUtils;
+import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.item.Items;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
+import net.minecraft.util.math.*;
 import net.minecraft.world.Heightmap;
 import net.minecraft.world.chunk.WorldChunk;
 import baritone.api.BaritoneAPI;
@@ -337,7 +342,27 @@ public class BaseFinder extends Module {
 
     }
 
+    private static final int MillisPerLavaBlock = 3000 / 4;
+    private static final int MillisPerWaterBlock = 500 / 4;
 
+
+    private void useItem(FindItemResult item, boolean placedWater, BlockPos blockPos, boolean interactItem) {
+        if (!item.found()) return;
+
+        if (interactItem) {
+            Rotations.rotate(Rotations.getYaw(blockPos), Rotations.getPitch(blockPos), 10, true, () -> {
+                if (item.isOffhand()) {
+                    mc.interactionManager.interactItem(mc.player, Hand.OFF_HAND);
+                } else {
+                    InvUtils.swap(item.slot(), true);
+                    mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
+                    InvUtils.swapBack();
+                }
+            });
+        } else {
+            BlockUtils.place(blockPos, item, true, 10, true);
+        }
+    }
 
 
 
@@ -367,6 +392,7 @@ public class BaseFinder extends Module {
                 info("Generating path");
 
                 int maxY = Integer.MIN_VALUE;
+                int minY = Integer.MAX_VALUE;
 
                 int sumX = 0;
                 int sumZ = 0;
@@ -376,6 +402,7 @@ public class BaseFinder extends Module {
                     Vec3d chunk = chunks.get(a);
 
                     maxY = Math.max(maxY, (int) chunk.y);
+                    minY = Math.min(minY, (int) chunk.y);
 
                     LavacastGenerator.Position pos = new LavacastGenerator.Position(
                         (int) ((chunk.x - CHUNK_CENTER_OFFSET) / 16),
@@ -406,15 +433,19 @@ public class BaseFinder extends Module {
                 //            info("Found path with " + countMoves(optimizedPath) + " Moves");
 
                 int Yoffset = (path.depthBeyond * 16) + maxY + 16;
+                int lavacastHeight = Yoffset - minY;
 
                 if (path != null)
                     recurseAddBlocks(path, 0, null, Yoffset);
 
+                int centerX = (path.position.x * 16) + CHUNK_CENTER_OFFSET;
+                int centerZ = (path.position.z * 16) + CHUNK_CENTER_OFFSET;
+
                 BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
                     new GoalBlock(
-                        (path.position.x * 16) + CHUNK_CENTER_OFFSET,
+                        centerX,
                         Yoffset + 1,
-                        (path.position.z * 16) + CHUNK_CENTER_OFFSET
+                        centerZ
                     )
                 );
 
@@ -422,6 +453,121 @@ public class BaseFinder extends Module {
                     Thread.sleep(100);
 
                 recurseBuild(path, 0, null, Yoffset);
+
+//                int level = 3;
+
+                for(int level = 3; level <= 15; level += 2){
+
+                    FindItemResult cobble = InvUtils.find(Items.COBBLESTONE);
+
+                    if (!cobble.found() || cobble.count() < 32) {
+                        error("Not enough blocks, halting");
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+
+                    BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
+                        new GoalBlock(
+                            centerX + 1,
+                            Yoffset + level,
+                            centerZ
+                        )
+                    );
+
+                    while(BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
+                        Thread.sleep(100);
+
+
+                    BlockPos lavacast_support_block_1 = new BlockPos(
+                        centerX, Yoffset + level - 3, centerZ
+                    );
+
+                    if (mc.world.getBlockState(lavacast_support_block_1).getBlock() == Blocks.AIR) {
+                        BlockUtils.place(lavacast_support_block_1, cobble, true, 0, true);
+                        Thread.sleep(PLACE_DELAY);
+                    }
+//
+//                    BlockPos lavacast_support_block2 = new BlockPos(
+//                        centerX, Yoffset + level - 2, centerZ
+//                    );
+//
+//                    if (mc.world.getBlockState(lavacast_support_block2).getBlock() == Blocks.AIR) {
+//                        BlockUtils.place(lavacast_support_block2, cobble, true, 0, true);
+//                        Thread.sleep(PLACE_DELAY);
+//                    }
+
+
+
+                    BlockPos lavacast_block = new BlockPos(
+                        centerX, Yoffset + level - 2, centerZ
+                    );
+
+                    if (mc.world.getBlockState(lavacast_block).getBlock() != Blocks.AIR) {
+                        BlockUtils.breakBlock(lavacast_block, false);
+                        Thread.sleep(PLACE_DELAY);
+                    }
+
+
+
+
+                    BlockPos scaffold_block_1 = new BlockPos(
+                        centerX, Yoffset + level - 1, centerZ
+                    );
+
+                    if (mc.world.getBlockState(scaffold_block_1).getBlock() != Blocks.AIR) {
+                        BlockUtils.breakBlock(scaffold_block_1
+                            , false);
+                        Thread.sleep(PLACE_DELAY);
+                    }
+//
+//
+
+
+                    BlockPos scaffold_block_2 = new BlockPos(
+                        centerX + 1, Yoffset + level - 2, centerZ
+                    );
+
+                    if (mc.world.getBlockState(scaffold_block_2).getBlock() != Blocks.AIR) {
+                        BlockUtils.breakBlock(scaffold_block_2, false);
+                        Thread.sleep(PLACE_DELAY);
+                    }
+
+
+                    BlockPos scaffold_block_3 = new BlockPos(
+                        centerX + 1, Yoffset + level - 3, centerZ
+                    );
+
+                    if (mc.world.getBlockState(scaffold_block_3).getBlock() != Blocks.AIR) {
+                        BlockUtils.breakBlock(scaffold_block_3, false);
+                        Thread.sleep(PLACE_DELAY);
+                    }
+
+
+                    mc.player.setPosition(
+                        centerX + 1.4,
+                        Yoffset + level,
+                        centerZ + 0.5
+                    );
+
+
+                    useItem(InvUtils.findInHotbar(Items.LAVA_BUCKET), false, lavacast_block, true);
+                    Thread.sleep((long) MillisPerLavaBlock * (lavacastHeight + level));
+                    useItem(InvUtils.findInHotbar(Items.BUCKET), false, lavacast_block, true);
+                    Thread.sleep(MillisPerLavaBlock);
+                    useItem(InvUtils.findInHotbar(Items.WATER_BUCKET), false, lavacast_block, true);
+                    Thread.sleep(MillisPerWaterBlock  * 4);
+                    useItem(InvUtils.findInHotbar(Items.BUCKET), false, lavacast_block, true);
+                    Thread.sleep(MillisPerWaterBlock * 2);
+
+
+
+
+
+
+
+
+//                    level += 2;
+                }
 
 
 //                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
@@ -446,29 +592,48 @@ public class BaseFinder extends Module {
             runThread.interrupt();
     }
 
-    private void recurseBuild(LavacastGenerator.MovementNode node, int depth, LavacastGenerator.Position prevPosition, int Yoffset) {
+    private static final int PLACE_DELAY = 100;
+
+    private void recurseBuild(LavacastGenerator.MovementNode node, int depth, LavacastGenerator.Position prevPosition, int Yoffset) throws InterruptedException {
+        info("Building with depth " + depth);
+
         if(prevPosition != null) {
             int deltaX = node.position.x - prevPosition.x;
             int deltaZ = node.position.z - prevPosition.z;
 
-//            BaritoneAPI.getProvider().getPrimaryBaritone().getProcess(
-//                new GoalBlock(
-//                    (path.position.x * 16) + CHUNK_CENTER_OFFSET,
-//                    Yoffset + 1,
-//                    (path.position.z * 16) + CHUNK_CENTER_OFFSET
-//                )
-//            );
+            FindItemResult invBlocks = InvUtils.find(Items.COBBLESTONE);
 
-//            while(BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
-//                Thread.sleep(100);
+            if (!invBlocks.found() || invBlocks.count() < 32) {
+                error("Not enough blocks, halting");
+//                toggle();
+                Thread.currentThread().interrupt();
+                return;
+            }
 
-//            for (int i = -16; i < 0; i++) {
-//                PlaceBlocks.add(new Vec3d(
-//                    (node.position.x * 16) + CHUNK_CENTER_OFFSET + (i * deltaX),
-//                    Yoffset - (depth * 16) - i,
-//                    (node.position.z * 16) + CHUNK_CENTER_OFFSET + (i * deltaZ)
-//                ));
-//            }
+
+
+            for (int i = -16; i < 0; i++) {
+
+                int x = (node.position.x * 16) + CHUNK_CENTER_OFFSET + (i * deltaX);
+                int y = Yoffset - (depth * 16) - i;
+                int z = (node.position.z * 16) + CHUNK_CENTER_OFFSET + (i * deltaZ);
+
+                BlockUtils.place(new BlockPos(new Vec3i(x, y, z)), invBlocks, true, 0, true);
+
+                Thread.sleep(PLACE_DELAY);
+
+                BlockUtils.place(new BlockPos(new Vec3i(x, y - 1, z)), invBlocks, true, 0, true);
+
+                Thread.sleep(PLACE_DELAY);
+
+
+                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
+                    new GoalBlock(x, y + 1, z)
+                );
+
+                while (BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
+                    Thread.sleep(100);
+            }
         }
 //            PlaceBlocks.add(new Vec3d(
 //                (node.position.x * 16) + CHUNK_CENTER_OFFSET,
@@ -478,13 +643,25 @@ public class BaseFinder extends Module {
 //        }
 
         if(node.PosX != null)
-            recurseAddBlocks(node.PosX, depth+1, node.position, Yoffset);
+            recurseBuild(node.PosX, depth+1, node.position, Yoffset);
         if(node.PosZ != null)
-            recurseAddBlocks(node.PosZ, depth+1, node.position, Yoffset);
+            recurseBuild(node.PosZ, depth+1, node.position, Yoffset);
         if(node.NegX != null)
-            recurseAddBlocks(node.NegX, depth+1, node.position, Yoffset);
+            recurseBuild(node.NegX, depth+1, node.position, Yoffset);
         if(node.NegZ != null)
-            recurseAddBlocks(node.NegZ, depth+1, node.position, Yoffset);
+            recurseBuild(node.NegZ, depth+1, node.position, Yoffset);
+
+        if(node.PosX != null || node.PosZ != null || node.NegX != null || node.NegZ != null) {
+            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
+                new GoalBlock(
+                    (node.position.x * 16) + CHUNK_CENTER_OFFSET,
+                    Yoffset - (depth * 16) + 1,
+                    (node.position.z * 16) + CHUNK_CENTER_OFFSET)
+            );
+
+            while (BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
+                Thread.sleep(100);
+        }
     }
 
 
