@@ -3,7 +3,9 @@
   "package": "com.example.addon.mixin",
   "compatibilityLevel": "JAVA_21",
   "client": [
-    "ExampleMixin"
+    "HeadlessMinecraftClient",
+    "HeadlessWidgetAccessor",
+    "HeadlessWindow"
   ],
   "injectors": {
     "defaultRequire": 1
