@@ -301,27 +301,27 @@ public class HeadlessMinecraftClient {
         return null;
     }
 
-    private String getMultiline() {
-
-
-        Screen currentScreen = self.currentScreen;
-        if (currentScreen == null) {
-            writer.println("No screen is currently open.");
-            return "";
-        }
-
-        for (Element element : currentScreen.children()) {
-
-            if (element instanceof MultilineTextWidget) {
-                Element found = findElementByIndex(((net.minecraft.client.gui.ParentElement) element).children(), targetIndex, currentIndex);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-
-        return "";
-    }
+//    private String getMultiline() {
+//
+//
+//        Screen currentScreen = self.currentScreen;
+//        if (currentScreen == null) {
+//            writer.println("No screen is currently open.");
+//            return "";
+//        }
+//
+//        for (Element element : currentScreen.children()) {
+//
+//            if (element instanceof MultilineTextWidget) {
+//                Element found = findElementByIndex(((net.minecraft.client.gui.ParentElement) element).children(), targetIndex, currentIndex);
+//                if (found != null) {
+//                    return found;
+//                }
+//            }
+//        }
+//
+//        return "";
+//    }
 
     private void simulateKeyPress(String keyName) {
         int keyCode = getKeyCode(keyName);

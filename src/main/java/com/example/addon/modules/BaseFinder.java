@@ -13,17 +13,21 @@ import meteordevelopment.meteorclient.renderer.ShapeMode;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
+import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.player.FindItemResult;
 import meteordevelopment.meteorclient.utils.player.InvUtils;
 import meteordevelopment.meteorclient.utils.player.Rotations;
 import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.meteorclient.utils.render.color.SettingColor;
+import meteordevelopment.meteorclient.utils.world.BlockIterator;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.item.Item;
 import net.minecraft.item.Items;
+import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.*;
@@ -291,8 +295,16 @@ public class BaseFinder extends Module {
 //        false_positions.addAll(positions);
     }
 
+    BlockPos editBlock = null;
+
     @EventHandler
     private void onRender(Render3DEvent event) {
+        if(editBlock != null) {
+            event.renderer.box(new Box(
+                editBlock.getX(), editBlock.getY(), editBlock.getZ(), editBlock.getX()+1, editBlock.getY()+1, editBlock.getZ()+1
+            ), Color.RED, Color.RED, ShapeMode.Sides, 0);
+        }
+
         for(Vec3d pos : UnnaturalPositions) {
             Box tmpbox = new Box(
                 pos.x, pos.y, pos.z, pos.x+1, pos.y+1, pos.z+1
@@ -346,17 +358,19 @@ public class BaseFinder extends Module {
     private static final int MillisPerWaterBlock = 500 / 4;
 
 
-    private void useItem(FindItemResult item, boolean placedWater, BlockPos blockPos, boolean interactItem) {
+    private void useItem(FindItemResult item, BlockPos blockPos, boolean interactItem) {
         if (!item.found()) return;
+
+        editBlock = blockPos;
 
         if (interactItem) {
             Rotations.rotate(Rotations.getYaw(blockPos), Rotations.getPitch(blockPos), 10, true, () -> {
                 if (item.isOffhand()) {
                     mc.interactionManager.interactItem(mc.player, Hand.OFF_HAND);
                 } else {
-                    InvUtils.swap(item.slot(), true);
+//                    InvUtils.swap(item.slot(), false);
                     mc.interactionManager.interactItem(mc.player, Hand.MAIN_HAND);
-                    InvUtils.swapBack();
+//                    InvUtils.swapBack();
                 }
             });
         } else {
@@ -373,6 +387,8 @@ public class BaseFinder extends Module {
 
     private List<ChunkPosition> AlreadyChosenChunks = new ArrayList<>();
     private Thread runThread;
+
+    private static final int LAVACAST_LAYER_COUNT = 5;
 
     public void generate() {
         PlaceBlocks.clear();
@@ -456,7 +472,12 @@ public class BaseFinder extends Module {
 
 //                int level = 3;
 
-                for(int level = 3; level <= 15; level += 2){
+//                for(int level = 5; level <= 5+(2*LAVACAST_LAYER_COUNT); level += 2){
+                for(int i = 0; i < LAVACAST_LAYER_COUNT; i++){
+                    int level = 5 + (LAVACAST_LAYER_COUNT * i * 2);
+                    info("Lavacasting layer: " + (i+1) + "/" + LAVACAST_LAYER_COUNT);
+
+//                    for(int level = 5; level <= 5+(2*LAVACAST_LAYER_COUNT); level += 2){
 
                     FindItemResult cobble = InvUtils.find(Items.COBBLESTONE);
 
@@ -478,85 +499,29 @@ public class BaseFinder extends Module {
                         Thread.sleep(100);
 
 
-                    BlockPos lavacast_support_block_1 = new BlockPos(
-                        centerX, Yoffset + level - 3, centerZ
-                    );
-
-                    if (mc.world.getBlockState(lavacast_support_block_1).getBlock() == Blocks.AIR) {
-                        BlockUtils.place(lavacast_support_block_1, cobble, true, 0, true);
-                        Thread.sleep(PLACE_DELAY);
-                    }
-//
-//                    BlockPos lavacast_support_block2 = new BlockPos(
-//                        centerX, Yoffset + level - 2, centerZ
-//                    );
-//
-//                    if (mc.world.getBlockState(lavacast_support_block2).getBlock() == Blocks.AIR) {
-//                        BlockUtils.place(lavacast_support_block2, cobble, true, 0, true);
-//                        Thread.sleep(PLACE_DELAY);
-//                    }
-
-
-
-                    BlockPos lavacast_block = new BlockPos(
-                        centerX, Yoffset + level - 2, centerZ
-                    );
-
-                    if (mc.world.getBlockState(lavacast_block).getBlock() != Blocks.AIR) {
-                        BlockUtils.breakBlock(lavacast_block, false);
-                        Thread.sleep(PLACE_DELAY);
-                    }
-
-
-
-
-                    BlockPos scaffold_block_1 = new BlockPos(
-                        centerX, Yoffset + level - 1, centerZ
-                    );
-
-                    if (mc.world.getBlockState(scaffold_block_1).getBlock() != Blocks.AIR) {
-                        BlockUtils.breakBlock(scaffold_block_1
-                            , false);
-                        Thread.sleep(PLACE_DELAY);
-                    }
-//
-//
-
-
-                    BlockPos scaffold_block_2 = new BlockPos(
-                        centerX + 1, Yoffset + level - 2, centerZ
-                    );
-
-                    if (mc.world.getBlockState(scaffold_block_2).getBlock() != Blocks.AIR) {
-                        BlockUtils.breakBlock(scaffold_block_2, false);
-                        Thread.sleep(PLACE_DELAY);
-                    }
-
-
-                    BlockPos scaffold_block_3 = new BlockPos(
-                        centerX + 1, Yoffset + level - 3, centerZ
-                    );
-
-                    if (mc.world.getBlockState(scaffold_block_3).getBlock() != Blocks.AIR) {
-                        BlockUtils.breakBlock(scaffold_block_3, false);
-                        Thread.sleep(PLACE_DELAY);
-                    }
-
+                    placeblockf(centerX, Yoffset + level - 5, centerZ);
+                    placeblockf(centerX, Yoffset + level - 4, centerZ);
+                    placeblockf(centerX, Yoffset + level - 3, centerZ);
+                    breakblock(centerX, Yoffset + level - 2, centerZ);
+                    breakblock(centerX, Yoffset + level - 1, centerZ);
+                    breakblock(centerX + 1, Yoffset + level - 2, centerZ);
+                    breakblock(centerX + 1, Yoffset + level - 3, centerZ);
 
                     mc.player.setPosition(
-                        centerX + 1.4,
+                        centerX + 0.9,
                         Yoffset + level,
                         centerZ + 0.5
                     );
 
+                    BlockPos lavacast_block = new BlockPos(centerX, Yoffset + level - 2, centerZ);
 
-                    useItem(InvUtils.findInHotbar(Items.LAVA_BUCKET), false, lavacast_block, true);
+                    useItem(findAndSwap(Items.LAVA_BUCKET), lavacast_block, true);
                     Thread.sleep((long) MillisPerLavaBlock * (lavacastHeight + level));
-                    useItem(InvUtils.findInHotbar(Items.BUCKET), false, lavacast_block, true);
+                    useItem(findAndSwap(Items.BUCKET), lavacast_block, true);
                     Thread.sleep(MillisPerLavaBlock);
-                    useItem(InvUtils.findInHotbar(Items.WATER_BUCKET), false, lavacast_block, true);
+                    useItem(findAndSwap(Items.WATER_BUCKET), lavacast_block, true);
                     Thread.sleep(MillisPerWaterBlock  * 4);
-                    useItem(InvUtils.findInHotbar(Items.BUCKET), false, lavacast_block, true);
+                    useItem(findAndSwap(Items.BUCKET), lavacast_block, true);
                     Thread.sleep(MillisPerWaterBlock * 2);
 
 
@@ -569,6 +534,7 @@ public class BaseFinder extends Module {
 //                    level += 2;
                 }
 
+                info("Finished building blocks");
 
 //                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
 //                    new GoalBlock(
@@ -593,6 +559,8 @@ public class BaseFinder extends Module {
     }
 
     private static final int PLACE_DELAY = 100;
+    private static final int BREAK_DELAY = 2000;
+
 
     private void recurseBuild(LavacastGenerator.MovementNode node, int depth, LavacastGenerator.Position prevPosition, int Yoffset) throws InterruptedException {
         info("Building with depth " + depth);
@@ -601,46 +569,45 @@ public class BaseFinder extends Module {
             int deltaX = node.position.x - prevPosition.x;
             int deltaZ = node.position.z - prevPosition.z;
 
-            FindItemResult invBlocks = InvUtils.find(Items.COBBLESTONE);
-
-            if (!invBlocks.found() || invBlocks.count() < 32) {
-                error("Not enough blocks, halting");
-//                toggle();
-                Thread.currentThread().interrupt();
-                return;
-            }
-
-
-
             for (int i = -16; i < 0; i++) {
 
                 int x = (node.position.x * 16) + CHUNK_CENTER_OFFSET + (i * deltaX);
                 int y = Yoffset - (depth * 16) - i;
                 int z = (node.position.z * 16) + CHUNK_CENTER_OFFSET + (i * deltaZ);
 
-                BlockUtils.place(new BlockPos(new Vec3i(x, y, z)), invBlocks, true, 0, true);
+                boolean lastblock = (i == -1);
 
-                Thread.sleep(PLACE_DELAY);
+                while (
+                    !isair(x, y+3, z) ||
+                    !isair(x, y+2, z) ||
+                    !isair(x, y+1, z) ||
+                    isair(x, y, z) ||
+                    (!lastblock &&
+                        (
+//                            isair(x, y-1, z) ||
+                            isair(x+deltaX, y-1, z+deltaZ)
+                        )
+                    )
+                ) {
 
-                BlockUtils.place(new BlockPos(new Vec3i(x, y - 1, z)), invBlocks, true, 0, true);
+//                    assert mc.player != null;
+//                    if(mc.player.getPos().distanceTo(new Vec3d(x-deltaX, y+1, z-deltaZ)) >= 1){
+//                        pathfindto(x-deltaX, y+1, z-deltaZ);
+//                    }
 
-                Thread.sleep(PLACE_DELAY);
+                    breakblock(x, y + 3, z);
+                    breakblock(x, y + 2, z);
+                    breakblock(x, y + 1, z);
+                    if(!lastblock){
+                        placeblock(x, y, z);
+//                        placeblock(x, y - 1, z);
+                        placeblock(x + deltaX, y - 1, z + deltaZ);
+                    }
+                }
 
-
-                BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
-                    new GoalBlock(x, y + 1, z)
-                );
-
-                while (BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
-                    Thread.sleep(100);
+                pathfindto(x, y+1, z);
             }
         }
-//            PlaceBlocks.add(new Vec3d(
-//                (node.position.x * 16) + CHUNK_CENTER_OFFSET,
-//                Yoffset - (depth * 16),
-//                (node.position.z * 16) + CHUNK_CENTER_OFFSET
-//            ));
-//        }
 
         if(node.PosX != null)
             recurseBuild(node.PosX, depth+1, node.position, Yoffset);
@@ -663,6 +630,102 @@ public class BaseFinder extends Module {
                 Thread.sleep(100);
         }
     }
+
+    private boolean isair(int x, int y, int z) {
+        return mc.world.getBlockState(new BlockPos(x, y, z)).getBlock() == Blocks.AIR;
+    }
+
+    private static final int hotbar_slot = 0;
+
+    private void placeblock(int x, int y, int z) throws InterruptedException {
+        if(!isair(x, y, z)) {return;}
+        placeblockf(x,y,z);
+    }
+
+    private void placeblockf(int x, int y, int z) throws InterruptedException {
+        FindItemResult invBlocks = findAndSwap(Items.COBBLESTONE);
+
+
+        if (invBlocks.count() < 32) {
+            error("Not enough blocks, halting");
+//                toggle();
+//            Thread.currentThread().interrupt();
+            return;
+        }
+
+        BlockPos pos = new BlockPos(new Vec3i(x, y, z));
+        editBlock = pos;
+
+        if(mc.player.getPos().distanceTo(new Vec3d(x,y,z)) > 7){
+            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
+                new GoalBlock(x,y,z)
+            );
+
+            while(isair(x, y, z)) {
+                BlockUtils.place(pos, invBlocks, true, 0, true);
+            }
+
+            BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(null);
+
+            return;
+        }
+
+        BlockUtils.place(pos, invBlocks, true, 0, true);
+        Thread.sleep(PLACE_DELAY);
+        System.out.println("Placed block " + (mc.world.getBlockState(pos).getBlock() != Blocks.AIR));
+
+    }
+
+    private FindItemResult findAndSwap(Item item){
+        FindItemResult itemResult = InvUtils.find(item);
+
+        swapto(itemResult);
+
+        if (!itemResult.found()) {
+            error("Failed to find " + item.getTranslationKey());
+        }
+
+        return itemResult;
+    }
+
+    private void swapto(FindItemResult itemResult){
+        InvUtils.move().from(itemResult.slot()).to(hotbar_slot);
+        InvUtils.swap(hotbar_slot, false);
+    }
+
+    private void breakblock(int x, int y, int z) throws InterruptedException {
+        if(isair(x, y, z)) { return;}
+
+
+        BlockPos blockPos = new BlockPos(
+            x,y,z
+        );
+
+        editBlock = blockPos;
+
+
+        swapto(InvUtils.findFastestTool(mc.world.getBlockState(blockPos)));
+
+
+        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
+        mc.player.swingHand(Hand.MAIN_HAND);
+        Thread.sleep(BREAK_DELAY);
+        mc.getNetworkHandler().sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.STOP_DESTROY_BLOCK, blockPos, BlockUtils.getDirection(blockPos)));
+
+
+        editBlock = null;
+
+    }
+
+    private void pathfindto(int x, int y, int z) throws InterruptedException {
+        BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().setGoalAndPath(
+            new GoalBlock(x, y, z)
+        );
+
+        while (BaritoneAPI.getProvider().getPrimaryBaritone().getCustomGoalProcess().isActive())
+            Thread.sleep(100);
+    }
+
 
 
 
